@@ -66,6 +66,7 @@ static struct retro_vr_frame_state  frame_state;
 static bool frame_valid;
 static unsigned eye_w = 1024, eye_h = 1024;
 static unsigned hold_missing;
+static bool refused;   /* not retried until HMD or head-locked drops */
 
 static bool   gl_ready;
 static GLuint gl_prog, gl_vbo, gl_tex;
@@ -307,14 +308,17 @@ static bool tracked_begin_frame(unsigned status, bool *av_changed)
    const bool hmd = (status & RETRO_VIDEO_VIEWS_STATUS_HMD) != 0;
 
    frame_valid = false;
+   if (!hmd || vr_option != VB_VR_HEAD_LOCKED)
+      refused = false;
 
-   switch (hold_step(vr_option == VB_VR_HEAD_LOCKED, hmd))
+   switch (hold_step(vr_option == VB_VR_HEAD_LOCKED && !refused, hmd))
    {
       case VR_ENTER:
          if (!request_eyes())
          {
             clear_map();   /* a first map may have been accepted */
             stereo_map = false;
+            refused    = true;
             return false;
          }
          stereo_map   = false;   /* the tracked map replaced it */
@@ -527,6 +531,7 @@ vb_present_mode vb_vr_negotiate(retro_environment_t env)
 #if VB_VR_ENABLED
    gl_ready      = false;
    frame_valid   = false;
+   refused       = false;
 
    if (vr_option != VB_VR_HEAD_LOCKED)
       return present_mode;
