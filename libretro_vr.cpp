@@ -20,13 +20,14 @@ static void clear_map(void)
 }
 
 /* The two eyes side by side as an untracked pair: the frontend shows them
- * as one stereo screen. */
+ * as one stereo screen. Sent every frame while wanted: it covers state
+ * loads and run-ahead. */
 static void set_stereo_map(bool stereo)
 {
    struct retro_video_views views;
    struct retro_video_view  view[2];
 
-   if (stereo == stereo_map)
+   if (!stereo && !stereo_map)
       return;
 
    memset(&views, 0, sizeof(views));
@@ -306,6 +307,7 @@ static bool request_eyes(void)
 static bool tracked_begin_frame(unsigned status, bool *av_changed)
 {
    const bool hmd = (status & RETRO_VIDEO_VIEWS_STATUS_HMD) != 0;
+   bool entered   = false, resized;
 
    frame_valid = false;
    if (!hmd || vr_option != VB_VR_HEAD_LOCKED)
@@ -326,6 +328,7 @@ static bool tracked_begin_frame(unsigned status, bool *av_changed)
          *av_changed  = true;
          VR_LOG(RETRO_LOG_INFO, "[Beetle VB] VR enabled, eye target %ux%u.\n",
                eye_w, eye_h);
+         entered      = true;
          break;
       case VR_TRACK:
          break;
@@ -344,7 +347,16 @@ static bool tracked_begin_frame(unsigned status, bool *av_changed)
    if (!vr_environ_cb(RETRO_ENVIRONMENT_GET_VR_FRAME_STATE, &frame_state))
       return true;
 
-   if (frame_state.flags & RETRO_VR_FRAME_TARGET_RESIZED)
+   resized = (frame_state.flags & RETRO_VR_FRAME_TARGET_RESIZED) != 0;
+   /* The map every frame, as for the stereo screen. A new size written
+    * back is a resize. */
+   if (!resized && !entered)
+   {
+      unsigned rw = 0, rh = 0;
+      resized = send_tracked_map(eye_w, eye_h, &rw, &rh)
+            && rw && rh && (rw != eye_w || rh != eye_h);
+   }
+   if (resized)
    {
       if (request_eyes())
       {
