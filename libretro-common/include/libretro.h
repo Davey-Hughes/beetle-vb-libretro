@@ -722,9 +722,10 @@ enum retro_mod
  */
 
 /**
- * This bit indicates that the associated environment call is experimental,
- * and may be changed or removed in the future.
- * Frontends should mask out this bit before handling the environment call.
+ * This bit used to indicate that the associated environment call is experimental,
+ * and may be changed or removed in the future, but this has since changed.
+ * Frontends should NOT mask out this bit before handling the environment call,
+ * as some callbacks need it to distinguish themselves from others.
  */
 #define RETRO_ENVIRONMENT_EXPERIMENTAL 0x10000
 
@@ -1682,6 +1683,22 @@ enum retro_mod
  * @see RETRO_ENVIRONMENT_SET_HW_RENDER
  */
 #define RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (43 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+
+/**
+ * Notifies the frontend of any quirks associated with serialization.
+ *
+ * Should be set in either \c retro_init or \c retro_load_game, but not both.
+ * @param[in, out] data <tt>uint64_t *</tt>.
+ * Pointer to the core's serialization quirks.
+ * The frontend will set the flags of the quirks it supports
+ * and clear the flags of those it doesn't.
+ * Behavior is undefined if \c NULL.
+ * @return \c true if this environment call is supported.
+ * @see retro_serialize
+ * @see retro_unserialize
+ * @see RETRO_SERIALIZATION_QUIRK
+ */
+#define RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS 44
 
 /**
  * The frontend will try to use a "shared" context when setting up a hardware context.
@@ -2718,20 +2735,12 @@ enum retro_mod
 #define RETRO_ENVIRONMENT_GET_MEMORY_STATUS (86 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /**
- * Notifies the frontend of any quirks associated with serialization.
+ * Legacy compatibility shim to RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS.
+ * Cores should avoid using this, as it is not as well-supported.
  *
- * Should be set in either \c retro_init or \c retro_load_game, but not both.
- * @param[in, out] data <tt>uint64_t *</tt>.
- * Pointer to the core's serialization quirks.
- * The frontend will set the flags of the quirks it supports
- * and clear the flags of those it doesn't.
- * Behavior is undefined if \c NULL.
- * @return \c true if this environment call is supported.
- * @see retro_serialize
- * @see retro_unserialize
  * @see RETRO_SERIALIZATION_QUIRK
  */
-#define RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS 87
+#define RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS_2 87
 
 /**
  * Queries whether the active video driver can present a 10-bit-per-channel
@@ -3028,9 +3037,7 @@ enum retro_vr_reference_space {
  * Without HMD the flag changes nothing. While HMD is set, a map with the
  * flag and any views must hold exactly one LEFT and one RIGHT view, or it
  * is refused; an empty map clears the views whatever its flags. */
-#define RETRO_VIDEO_VIEWS_FLAG_TRACKED (1 << 1)
-/* (1 << 0) is reserved: cores built against the previous header may set
- * it. */
+#define RETRO_VIDEO_VIEWS_FLAG_TRACKED (1 << 0)
 
 /**
  * One view of the frame.
@@ -3067,10 +3074,6 @@ struct retro_video_views
     * (standing, LOCAL where the runtime has none).
     */
    enum retro_vr_reference_space reference_space;
-
-   /** Reserved, 0: keeps the layout of cores built against the previous
-    * header. */
-   float reserved;
 
    /**
     * Output, while RETRO_VIDEO_VIEWS_STATUS_HMD is set: the recommended
